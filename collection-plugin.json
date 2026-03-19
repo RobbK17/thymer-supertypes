@@ -1,0 +1,278 @@
+{
+	"ver": 1,
+	"name": "Supertypes",
+	"icon": "ti-note",
+	"color": null,
+	"home": false,
+	"item_name": "Node",
+	"description": "Tana-style supertypes: assign semantic types (task, person, project, meeting, note, idea, resource) to records, with type-specific defaults and a computed Summary.",
+	"show_sidebar_items": true,
+	"show_cmdpal_items": true,
+	"default_banner": null,
+	"page_field_ids": [
+		"title",
+		"type",
+		"status",
+		"priority",
+		"due_date",
+		"meeting_date",
+		"role",
+		"email",
+		"company",
+		"url",
+		"source",
+		"attendees",
+		"phone",
+		"summary"
+	],
+	"sidebar_record_sort_dir": "desc",
+	"sidebar_record_sort_field_id": "updated_at",
+	"managed": {
+		"fields": false,
+		"views": false,
+		"sidebar": false
+	},
+	"custom": {},
+	"fields": [
+		{
+			"id": "title",
+			"label": "Title",
+			"icon": "ti-abc",
+			"type": "text",
+			"many": false,
+			"read_only": false,
+			"active": true
+		},
+		{
+			"id": "type",
+			"label": "Type",
+			"icon": "ti-tag",
+			"type": "choice",
+			"many": false,
+			"read_only": false,
+			"active": true,
+			"choices": [
+				{ "id": "task",     "label": "#task",     "color": "4",  "active": true },
+				{ "id": "person",   "label": "#person",   "color": "2",  "active": true },
+				{ "id": "project",  "label": "#project",  "color": "5",  "active": true },
+				{ "id": "meeting",  "label": "#meeting",  "color": "1",  "active": true },
+				{ "id": "note",     "label": "#note",     "color": "3",  "active": true },
+				{ "id": "idea",     "label": "#idea",     "color": "7",  "active": true },
+				{ "id": "resource", "label": "#resource", "color": "10", "active": true }
+			]
+		},
+		{
+			"id": "status",
+			"label": "Status",
+			"icon": "ti-circle-dot",
+			"type": "choice",
+			"many": false,
+			"read_only": false,
+			"active": true,
+			"choices": [
+				{ "id": "todo",        "label": "To Do",       "color": "13", "active": true },
+				{ "id": "in_progress", "label": "In Progress", "color": "4",  "active": true },
+				{ "id": "done",        "label": "Done",        "color": "2",  "active": true },
+				{ "id": "blocked",     "label": "Blocked",     "color": "0",  "active": true },
+				{ "id": "active",      "label": "Active",      "color": "3",  "active": true },
+				{ "id": "on_hold",     "label": "On Hold",     "color": "1",  "active": true },
+				{ "id": "archived",    "label": "Archived",    "color": "9",  "active": true },
+				{ "id": "planning",    "label": "Planning",    "color": "12", "active": true },
+				{ "id": "raw",         "label": "Raw",         "color": "6",  "active": true }
+			]
+		},
+		{
+			"id": "priority",
+			"label": "Priority",
+			"icon": "ti-flag",
+			"type": "choice",
+			"many": false,
+			"read_only": false,
+			"active": true,
+			"choices": [
+				{ "id": "low",    "label": "Low",    "color": "2",  "active": true },
+				{ "id": "medium", "label": "Medium", "color": "1",  "active": true },
+				{ "id": "high",   "label": "High",   "color": "0",  "active": true },
+				{ "id": "urgent", "label": "Urgent", "color": "8",  "active": true }
+			]
+		},
+		{
+			"id": "due_date",
+			"label": "Due Date",
+			"icon": "ti-calendar-due",
+			"type": "datetime",
+			"many": false,
+			"read_only": false,
+			"active": true
+		},
+		{
+			"id": "meeting_date",
+			"label": "Meeting Date",
+			"icon": "ti-calendar-event",
+			"type": "datetime",
+			"many": false,
+			"read_only": false,
+			"active": true
+		},
+		{
+			"id": "role",
+			"label": "Role",
+			"icon": "ti-briefcase",
+			"type": "text",
+			"many": false,
+			"read_only": false,
+			"active": true
+		},
+		{
+			"id": "email",
+			"label": "Email",
+			"icon": "ti-mail",
+			"type": "text",
+			"many": false,
+			"read_only": false,
+			"active": true
+		},
+		{
+			"id": "company",
+			"label": "Company",
+			"icon": "ti-building",
+			"type": "text",
+			"many": false,
+			"read_only": false,
+			"active": true
+		},
+		{
+			"id": "url",
+			"label": "URL",
+			"icon": "ti-link",
+			"type": "text",
+			"many": false,
+			"read_only": false,
+			"active": true
+		},
+		{
+			"id": "source",
+			"label": "Source",
+			"icon": "ti-source-code",
+			"type": "text",
+			"many": false,
+			"read_only": false,
+			"active": true
+		},
+		{
+			"id": "attendees",
+			"label": "Attendees",
+			"icon": "ti-users",
+			"type": "text",
+			"many": false,
+			"read_only": false,
+			"active": true
+		},
+		{
+			"id": "phone",
+			"label": "Phone",
+			"icon": "ti-phone",
+			"type": "text",
+			"many": false,
+			"read_only": false,
+			"active": true
+		},
+		{
+			"id": "summary",
+			"label": "Summary",
+			"icon": "ti-sparkles",
+			"type": "dynamic",
+			"many": false,
+			"read_only": true,
+			"active": true
+		},
+		{
+			"id": "updated_at",
+			"label": "Modified",
+			"icon": "ti-clock-edit",
+			"type": "datetime",
+			"many": false,
+			"read_only": true,
+			"active": true
+		},
+		{
+			"id": "created_at",
+			"label": "Created",
+			"icon": "ti-clock-plus",
+			"type": "datetime",
+			"many": false,
+			"read_only": true,
+			"active": true
+		},
+		{
+			"id": "banner",
+			"label": "Banner",
+			"icon": "ti-photo",
+			"type": "banner",
+			"many": false,
+			"read_only": false,
+			"active": true
+		}
+	],
+	"views": [
+		{
+			"id": "table",
+			"type": "table",
+			"icon": "ti-table",
+			"label": "All Nodes",
+			"description": "All records in this collection",
+			"query": "",
+			"read_only": false,
+			"shown": true,
+			"field_ids": ["title", "type", "status", "priority", "due_date", "summary"],
+			"sort_dir": "desc",
+			"sort_field_id": "updated_at",
+			"group_by_field_id": null
+		},
+		{
+			"id": "board_by_type",
+			"type": "board",
+			"icon": "ti-layout-board",
+			"label": "By Type",
+			"description": "Grouped by type",
+			"query": "",
+			"read_only": false,
+			"shown": true,
+			"field_ids": ["type", "status", "priority", "due_date", "summary"],
+			"sort_dir": "desc",
+			"sort_field_id": "updated_at",
+			"group_by_field_id": "type",
+			"opts": {}
+		},
+		{
+			"id": "board_by_status",
+			"type": "board",
+			"icon": "ti-layout-kanban",
+			"label": "By Status",
+			"description": "Grouped by status",
+			"query": "",
+			"read_only": false,
+			"shown": true,
+			"field_ids": ["type", "status", "priority", "due_date", "summary"],
+			"sort_dir": "desc",
+			"sort_field_id": "updated_at",
+			"group_by_field_id": "status",
+			"opts": {}
+		},
+		{
+			"id": "settings",
+			"type": "custom",
+			"icon": "ti-settings",
+			"label": "Settings",
+			"description": "Field visibility and labels per type",
+			"query": "",
+			"read_only": false,
+			"shown": true,
+			"field_ids": [],
+			"sort_dir": "desc",
+			"sort_field_id": "updated_at",
+			"group_by_field_id": null,
+			"opts": {}
+		}
+	]
+}

@@ -1,0 +1,23 @@
+{
+	"ver": 1,
+	"name": "Supertype Tagger",
+	"icon": "ti-tag",
+	"item_name": "Note",
+	"description": "Apply #task, #person, #project etc. supertypes to any record in any collection",
+	"show_sidebar_items": true,
+	"show_cmdpal_items": true,
+	"views": [],
+	"fields": [],
+	"page_field_ids": [],
+	"sidebar_record_sort_field_id": "updated_at",
+	"sidebar_record_sort_dir": "desc",
+	"managed": {
+		"fields": false,
+		"views": false,
+		"sidebar": false
+	},
+	"custom": {},
+	"home": false,
+	"version": "1.0.0",
+	"__source_repo": "https://github.com/robbk17/thymer-supertype"
+}
