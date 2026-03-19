@@ -4,6 +4,17 @@ A collection plugin for [Thymer](https://thymer.com) that adds typed records wit
 
 ---
 
+## Installation (Collection Plugin)
+
+1. In your Thymer workspace, open the collection you want this plugin to enhance.
+2. Create/add a new **Collection Plugin**.
+3. Set the plugin manifest/metadata from this repo's `collection-plugin.json`.
+4. Set the plugin implementation code from this repo's `collection-plugin.js`.
+5. Save and enable the plugin, then reload the collection page.
+6. Open the collection sidebar and use the **Supertypes / Types** button to access the Settings UI.
+
+---
+
 ## Built-in types
 
 Seven types are included out of the box. Each renders as a coloured monospace badge on every record.
@@ -130,6 +141,6 @@ All settings are stored in `localStorage` under the key `thymer_supertypes_confi
 
 - Requires the Thymer collection plugin API (`CollectionPlugin` base class)
 - Tabler Icons webfont loaded from `https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css`
-- Field hide/show is applied by DOM scanning on a schedule (100 ms, 500 ms, 1.2 s, 2.5 s intervals) and via a `MutationObserver` for up to 20 seconds after load
+- Field hide/show uses Thymer render hooks on record pages, and (for the Properties settings panel) scheduled DOM scans at 100 ms, 500 ms, 1.2 s, and 2.5 s, then every 1.5 s until 20 seconds after load, plus a `MutationObserver` that disconnects after 20 seconds
 - Fields with `active: false` in `getConfiguration().fields` are treated as archived and excluded from all plugin UI and logic
 - The `summary` and `icon` system fields are hidden from Settings UI but not from record pages
