@@ -6,7 +6,13 @@ A collection plugin for [Thymer](https://thymer.com) that adds typed records wit
 
 ## Version
 
-Current version: `1.0.1`
+Current version: `1.0.2`
+
+### 1.0.2 changes
+
+- Added split-view-safe field visibility behavior so record property hiding does not affect collection lists in the other panel.
+- Improved scope isolation for properties-panel scanning and row/field hiding.
+- Removed temporary debug instrumentation used during split-view diagnosis.
 
 ### 1.0.1 changes
 
@@ -154,5 +160,6 @@ All settings are stored in `localStorage` under the key `thymer_supertypes_confi
 - Requires the Thymer collection plugin API (`CollectionPlugin` base class)
 - Tabler Icons webfont loaded from `https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css`
 - Field hide/show uses Thymer render hooks on record pages; for the Properties panel it uses scheduled scans at 100 ms, 500 ms, 1.2 s, and 2.5 s, then every 1.5 s for 20 seconds, plus a coalesced `MutationObserver` that remains active for record navigation updates
+- Properties-panel hide/sort logic is scoped to record-property containers to avoid affecting collection list tables in split view
 - Fields with `active: false` in `getConfiguration().fields` are treated as archived and excluded from all plugin UI and logic
 - The `summary` and `icon` system fields are hidden from Settings UI but not from record pages

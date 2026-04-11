@@ -1,7 +1,7 @@
 /**
  * Supertypes — collection plugin for Thymer
  *
- * v1.0.1
+ * v1.0.2
  */
 
 // ─── Built-in type config ─────────────────────────────────────────────────────
@@ -352,6 +352,12 @@ class Plugin extends CollectionPlugin {
 
 		for (const { id: fieldId } of this._getManageableFields()) {
 			this.properties.render(fieldId, ({ record }) => {
+				// Only apply per-type record-page hiding to the currently active record.
+				// This prevents list/table rows in other panels from being hidden when
+				// split view is open and the page body contains a "Properties" section.
+				const activeRecord = this.ui?.getActivePanel?.()?.getActiveRecord?.();
+				if (!activeRecord || !record || typeof activeRecord.getGuid !== 'function' || typeof record.getGuid !== 'function') return null;
+				if (activeRecord.getGuid() !== record.getGuid()) return null;
 				const bodyText = typeof document !== 'undefined' && document.body?.textContent || '';
 				if (!bodyText.includes('Properties') || bodyText.includes('Field Visibility')) return null;
 				loadConfig();
@@ -1008,6 +1014,38 @@ class Plugin extends CollectionPlugin {
 		};
 
 		const normalizeTypeText = (text) => (text || '').trim().replace(/^#/, '').toLowerCase();
+		const markerAttr = 'data-st-props-scope';
+		const fieldTypeSelector = '[data-field-id="type"],[data-prop-id="type"],[data-field="type"],[data-property-id="type"]';
+		// Clear any previous scope markers before computing fresh scope roots.
+		for (const el of this._queryAll(`[${markerAttr}]`, doc)) el.removeAttribute(markerAttr);
+		const scopeRoots = [];
+		for (const n of this._queryAll('*', doc)) {
+			if ((n.textContent || '').trim() !== 'Properties') continue;
+			let node = n.parentElement;
+			for (let i = 0; i < 10 && node && node !== doc.body && node !== doc.documentElement; i++, node = node.parentElement) {
+				const text = (node.textContent || '');
+				const sample = text.slice(0, 6000);
+				if (text.includes('Supertypes Settings')) break;
+				// Skip table/list-like containers so we only scope to record property panels.
+				if (node.querySelector('table,thead,[role="columnheader"],[class*="table"]')) continue;
+				// Skip split/container nodes that include collection list UI.
+				if (sample.includes('All Nodes') || sample.includes('New Node') || sample.includes('By Type') || sample.includes('By Status')) continue;
+				if (node.querySelector(fieldTypeSelector) && node.children.length >= 2 && node.children.length <= 24) {
+					if (!scopeRoots.includes(node)) scopeRoots.push(node);
+					break;
+				}
+			}
+		}
+		if (!scopeRoots.length) {
+			doc.getElementById('st-hide-style')?.remove();
+			return;
+		}
+		for (const root of scopeRoots) root.setAttribute(markerAttr, '');
+		const iterScopeMatches = (selector) => {
+			const out = [];
+			for (const root of scopeRoots) out.push(...this._queryAll(selector, root));
+			return out;
+		};
 
 		// Build lookup maps from all types including custom
 		const typeSlugMap = Object.fromEntries(ALL_TYPES.map(id => [SUPERTYPE_CONFIG[id]?.label, id]).filter(([l]) => l));
@@ -1022,7 +1060,7 @@ class Plugin extends CollectionPlugin {
 			if (normalizedActiveType && typeIdMap[normalizedActiveType]) currentType = typeIdMap[normalizedActiveType];
 		} catch (_) {}
 
-		for (const s of this._queryAll('span', doc)) {
+		for (const s of iterScopeMatches('span')) {
 			if (currentType) break;
 			if (inSettings(s)) continue;
 			const t = (s.textContent || '').trim();
@@ -1031,7 +1069,7 @@ class Plugin extends CollectionPlugin {
 			if (typeIdMap[normalized]) { currentType = typeIdMap[normalized]; break; }
 		}
 		if (!currentType) {
-			for (const n of this._queryAll('*', doc)) {
+			for (const n of iterScopeMatches('*')) {
 				if (inSettings(n)) continue;
 				const t = (n.textContent || '').trim();
 				if (typeNameMap[t] && n.children.length <= 3 && !n.querySelector('table,ul,ol')) { currentType = typeNameMap[t]; break; }
@@ -1047,33 +1085,39 @@ class Plugin extends CollectionPlugin {
 		const allIds = new Set([...Object.keys(DEFAULT_FIELD_TYPES), ...(this.getConfiguration().fields || []).filter(f => f.active !== false).map(f => f.id).filter(id => !SYSTEM_FIELD_IDS.has(id))]);
 		const toHide = [...allIds].filter(fid => !isFieldVisible(fid, currentType));
 
-		if (!toHide.length) { doc.getElementById('st-hide-style')?.remove(); this._sortPropertiesPanelInDoc(doc, new Set()); return; }
+		if (!toHide.length) { doc.getElementById('st-hide-style')?.remove(); this._sortPropertiesPanelInDoc(doc, new Set(), scopeRoots); return; }
 
 		const fd = f => f.replace(/_/g, '-');
 		const sel = f => { const d = fd(f); return `[data-field-id="${f}"],[data-field-id="${d}"],[data-prop-id="${f}"],[data-prop-id="${d}"],[data-field="${f}"],[data-field="${d}"],[data-property-id="${f}"],[data-property-id="${d}"]`; };
 
 		let styleEl = doc.getElementById('st-hide-style');
 		if (!styleEl) { styleEl = doc.createElement('style'); styleEl.id = 'st-hide-style'; (doc.head || doc.documentElement).appendChild(styleEl); }
-		styleEl.textContent = toHide.map(fid => { const s = sel(fid), fs = `[data-field-id="${fid}"]`; return `${s},tr:has(${fs}),[role="row"]:has(${fs}){display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;border:none!important;}`; }).join('\n');
+		styleEl.textContent = toHide.map(fid => {
+			const s = sel(fid);
+			// Keep stylesheet-scoped hiding field-specific; avoid row-wide :has() selectors
+			// which can accidentally affect table/list rows in split layouts.
+			return `[${markerAttr}] ${s}{display:none!important;visibility:hidden!important;height:0!important;min-height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;border:none!important;}`;
+		}).join('\n');
 
 		const hiddenRows = new Set(), docBody = doc.body, docEl = doc.documentElement;
 		const hideRow = row => { hiddenRows.add(row); _applyHideStyles(row); };
 
-		for (const fid of toHide) { for (const el of this._queryAll(sel(fid), doc)) { if (inSettings(el)) continue; const row = this._findPropertyRow(el, docBody); if (row && row !== docBody && row !== docEl && !inSettings(row) && !hiddenRows.has(row)) hideRow(row); } }
+		for (const fid of toHide) { for (const el of iterScopeMatches(sel(fid))) { if (inSettings(el)) continue; const row = this._findPropertyRow(el, docBody); if (row && row !== docBody && row !== docEl && !inSettings(row) && !hiddenRows.has(row)) hideRow(row); } }
 
 		const fc = (this.getConfiguration().fields || []).filter(f => f.active !== false);
 		const fil = Object.fromEntries(fc.map(f => [f.id, f.label]));
-		const roots = [docBody]; const cr = n => { if (!n || n.nodeType !== 1) return; if (n.shadowRoot) { roots.push(n.shadowRoot); cr(n.shadowRoot); } for (const c of n.children || []) cr(c); }; cr(docBody);
+		const roots = [...scopeRoots]; const cr = n => { if (!n || n.nodeType !== 1) return; if (n.shadowRoot) { roots.push(n.shadowRoot); cr(n.shadowRoot); } for (const c of n.children || []) cr(c); }; scopeRoots.forEach(cr);
 		for (const fid of toHide) {
 			const label = getFieldLabel(fid, fil[fid] || fid); if (!label) continue;
 			const found = []; const visit = n => { if (!n || n.nodeType !== 1 || inSettings(n)) return; if ((n.textContent || '').trim() === label && n.children.length <= 2) found.push(n); for (const c of n.children || []) visit(c); if (n.shadowRoot) visit(n.shadowRoot); }; roots.forEach(r => visit(r));
 			for (const el of found) { const row = this._findPropertyRow(el, docBody); if (row && row !== docBody && row !== docEl && !inSettings(row) && !hiddenRows.has(row)) hideRow(row); }
 		}
-		this._sortPropertiesPanelInDoc(doc, hiddenRows);
+		this._sortPropertiesPanelInDoc(doc, hiddenRows, scopeRoots);
 	}
 
-	_sortPropertiesPanelInDoc(doc, hiddenRows) {
+	_sortPropertiesPanelInDoc(doc, hiddenRows, scopeRoots) {
 		if (!doc?.body) return;
+		const roots = Array.isArray(scopeRoots) && scopeRoots.length ? scopeRoots : [doc.body];
 		const fc = (this.getConfiguration().fields || []).filter(f => f.active !== false);
 		const fil = Object.fromEntries(fc.map(f => [f.id, f.label]));
 		const fit = Object.fromEntries(fc.map(f => [f.id, f.type]));
@@ -1089,17 +1133,19 @@ class Plugin extends CollectionPlugin {
 		// Pass 1: data-attribute selectors
 		for (const fid of allIds) {
 			const label = getFieldLabel(fid, fil[fid] || fid), ic = FIELD_ICONS[fid] || FIELD_TYPE_ICONS[fit[fid]] || 'ti-point';
-			for (const el of this._queryAll(sel(fid), doc)) {
-				if (inSettings(el)) continue;
-				const row = this._findPropertyRow(el, docBody);
-				if (!row || seen.has(row) || this._isRowHidden(row, hiddenRows)) continue;
-				seen.add(row); rows.push({ label, row, parent: row.parentElement, fid, ic });
+			for (const root of roots) {
+				for (const el of this._queryAll(sel(fid), root)) {
+					if (inSettings(el)) continue;
+					const row = this._findPropertyRow(el, docBody);
+					if (!row || seen.has(row) || this._isRowHidden(row, hiddenRows)) continue;
+					seen.add(row); rows.push({ label, row, parent: row.parentElement, fid, ic });
+				}
 			}
 		}
 		// Pass 2: label text fallback
 		const labelEntries = [...Object.entries(FIELD_LABEL_TO_ID), ...fc.filter(f => !SYSTEM_FIELD_IDS.has(f.id)).map(f => [f.label, f.id])];
 		const vl = (n, lt, fid, ic) => { if (!n || n.nodeType !== 1 || inSettings(n)) return; if ((n.textContent || '').trim() === lt && n.children.length <= 2) { const row = this._findPropertyRow(n, docBody); if (row && !seen.has(row) && !this._isRowHidden(row, hiddenRows)) { seen.add(row); rows.push({ label: lt, row, parent: row.parentElement, fid, ic }); } } for (const c of n.children || []) vl(c, lt, fid, ic); if (n.shadowRoot) vl(n.shadowRoot, lt, fid, ic); };
-		for (const [lt, fid] of labelEntries) vl(docBody, getFieldLabel(fid, lt), fid, FIELD_ICONS[fid] || FIELD_TYPE_ICONS[fit[fid]] || 'ti-point');
+		for (const [lt, fid] of labelEntries) roots.forEach(root => vl(root, getFieldLabel(fid, lt), fid, FIELD_ICONS[fid] || FIELD_TYPE_ICONS[fit[fid]] || 'ti-point'));
 
 		for (const { row, ic, label } of rows) this._injectFieldIcon(row, ic, label, doc);
 		if (rows.length < 2) return;
