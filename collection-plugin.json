@@ -8,6 +8,7 @@
 	"description": "Tana-style supertypes: assign semantic types (task, person, project, meeting, note, idea, resource) to records, with type-specific defaults and a computed Summary.",
 	"show_sidebar_items": true,
 	"show_cmdpal_items": true,
+	"version": "1.0.1",
 	"default_banner": null,
 	"page_field_ids": [
 		"title",

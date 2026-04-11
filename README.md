@@ -4,6 +4,18 @@ A collection plugin for [Thymer](https://thymer.com) that adds typed records wit
 
 ---
 
+## Version
+
+Current version: `1.0.1`
+
+### 1.0.1 changes
+
+- Improved scan performance with coalesced scheduling and reduced redundant config parsing.
+- Improved reliability when switching between records so field visibility stays in sync with the active type.
+- Updated observer/scheduling behavior to reduce drift in properties visibility after navigation.
+
+---
+
 ## Installation (Collection Plugin)
 
 1. In your Thymer workspace, open the collection you want this plugin to enhance.
@@ -141,6 +153,6 @@ All settings are stored in `localStorage` under the key `thymer_supertypes_confi
 
 - Requires the Thymer collection plugin API (`CollectionPlugin` base class)
 - Tabler Icons webfont loaded from `https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css`
-- Field hide/show uses Thymer render hooks on record pages, and (for the Properties settings panel) scheduled DOM scans at 100 ms, 500 ms, 1.2 s, and 2.5 s, then every 1.5 s until 20 seconds after load, plus a `MutationObserver` that disconnects after 20 seconds
+- Field hide/show uses Thymer render hooks on record pages; for the Properties panel it uses scheduled scans at 100 ms, 500 ms, 1.2 s, and 2.5 s, then every 1.5 s for 20 seconds, plus a coalesced `MutationObserver` that remains active for record navigation updates
 - Fields with `active: false` in `getConfiguration().fields` are treated as archived and excluded from all plugin UI and logic
 - The `summary` and `icon` system fields are hidden from Settings UI but not from record pages

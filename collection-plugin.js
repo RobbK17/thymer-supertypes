@@ -1,7 +1,7 @@
 /**
  * Supertypes — collection plugin for Thymer
  *
- * v1.0.0
+ * v1.0.1
  */
 
 // ─── Built-in type config ─────────────────────────────────────────────────────
@@ -131,6 +131,8 @@ const CONFIG_KEY = 'thymer_supertypes_config';
 let currentFieldTypes  = {};
 let currentFieldLabels = {};
 let customTypes  = []; // { id, label, fg, bg, border, icon, defaultStatus, defaultPriority, fieldIds }
+let _lastConfigRaw = null;
+let _configLoaded = false;
 
 function _rebuildRuntimeTypes() {
 	SUPERTYPE_CONFIG = { ...BUILTIN_SUPERTYPE_CONFIG };
@@ -141,9 +143,12 @@ function _rebuildRuntimeTypes() {
 	}
 }
 
-function loadConfig() {
+function loadConfig(force = false) {
 	try {
 		const raw = localStorage.getItem(CONFIG_KEY);
+		if (!force && _configLoaded && raw === _lastConfigRaw) return;
+		_lastConfigRaw = raw;
+		_configLoaded = true;
 		if (raw) {
 			const cfg = JSON.parse(raw);
 			currentFieldTypes  = Object.fromEntries(Object.entries(cfg.field_types || {}).map(([k, v]) => [k, new Set(Array.isArray(v) ? v : [])]));
@@ -157,11 +162,14 @@ function loadConfig() {
 }
 
 function saveConfig() {
-	localStorage.setItem(CONFIG_KEY, JSON.stringify({
+	const serialized = JSON.stringify({
 		field_types:   Object.fromEntries(Object.entries(currentFieldTypes).map(([k, v]) => [k, [...v]])),
 		field_labels:  { ...currentFieldLabels },
 		custom_types:  customTypes,
-	}));
+	});
+	localStorage.setItem(CONFIG_KEY, serialized);
+	_lastConfigRaw = serialized;
+	_configLoaded = true;
 	_rebuildRuntimeTypes();
 	// Clear scan cache so _scanTypeBadges re-applies updated colours
 	try { document.querySelectorAll('[data-st-styled]').forEach(el => el.removeAttribute('data-st-styled')); } catch (_) {}
@@ -255,8 +263,53 @@ function hiddenEl() {
 // ─── Plugin ───────────────────────────────────────────────────────────────────
 class Plugin extends CollectionPlugin {
 
+	_resetRuntimeHandles() {
+		this._stTimeouts = [];
+		this._stIntervals = [];
+		this._stObservers = [];
+		this._stScanQueueState = {};
+	}
+
+	_trackTimeout(id) {
+		this._stTimeouts.push(id);
+		return id;
+	}
+
+	_trackInterval(id) {
+		this._stIntervals.push(id);
+		return id;
+	}
+
+	_trackObserver(obs) {
+		this._stObservers.push(obs);
+		return obs;
+	}
+
+	_queueScan(scanKey, fn) {
+		if (!this._stScanQueueState[scanKey]) this._stScanQueueState[scanKey] = { scheduled: false, running: false, queued: false };
+		const st = this._stScanQueueState[scanKey];
+		if (st.running) { st.queued = true; return; }
+		if (st.scheduled) return;
+		st.scheduled = true;
+		const schedule = (typeof requestAnimationFrame === 'function')
+			? requestAnimationFrame
+			: (cb) => this._trackTimeout(setTimeout(cb, 16));
+		schedule(() => {
+			st.scheduled = false;
+			st.running = true;
+			try { fn(); } finally {
+				st.running = false;
+				if (st.queued) {
+					st.queued = false;
+					this._queueScan(scanKey, fn);
+				}
+			}
+		});
+	}
+
 	onLoad() {
-		loadConfig();
+		this._resetRuntimeHandles();
+		loadConfig(true);
 
 		this.ui.injectCSS('[data-st-hidden-row]{display:none!important;visibility:hidden!important;height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;}');
 		this.ui.injectCSS('[data-st-badge]{border-radius:10px!important;overflow:visible!important;}');
@@ -335,6 +388,15 @@ class Plugin extends CollectionPlugin {
 		});
 
 		this._registerSettingsView();
+	}
+
+	onUnload() {
+		for (const id of this._stTimeouts || []) clearTimeout(id);
+		for (const id of this._stIntervals || []) clearInterval(id);
+		for (const obs of this._stObservers || []) {
+			try { obs.disconnect(); } catch (_) {}
+		}
+		this._resetRuntimeHandles();
 	}
 
 	// ─── Settings view ────────────────────────────────────────────────────────
@@ -808,18 +870,40 @@ class Plugin extends CollectionPlugin {
 	}
 
 	_scheduleTypeBadgeScan() {
-		const run = () => this._scanTypeBadges();
-		[100, 500, 1200, 2500].forEach(d => setTimeout(run, d));
-		// Keep interval running for the life of the page — Thymer re-renders rows on every record change
-		setInterval(run, 1500);
-		// MutationObserver never disconnects so fresh DOM nodes are always caught
-		try { const obs = new MutationObserver(run); obs.observe(document.body, { childList: true, subtree: true }); } catch (_) {}
+		const runFull = () => this._queueScan('typeBadges', () => this._scanTypeBadges(document));
+		[100, 500, 1200, 2500].forEach(d => this._trackTimeout(setTimeout(runFull, d)));
+		// Short-lived fallback polling during initial page churn, then rely on MutationObserver.
+		const iv = this._trackInterval(setInterval(runFull, 1500));
+		this._trackTimeout(setTimeout(() => clearInterval(iv), 15000));
+		try {
+			const obs = new MutationObserver((mutations) => {
+				const roots = new Set();
+				for (const m of mutations || []) {
+					for (const n of m.addedNodes || []) {
+						if (n?.nodeType === 1) roots.add(n);
+					}
+				}
+				if (!roots.size) return;
+				this._queueScan('typeBadges', () => {
+					for (const root of roots) this._scanTypeBadges(root);
+				});
+			});
+			obs.observe(document.body, { childList: true, subtree: true });
+			this._trackObserver(obs);
+		} catch (_) {}
 	}
 
-	_scanTypeBadges() {
+	_scanTypeBadges(root) {
 		loadConfig();
+		const selector = '[data-field-id="type"] .prop-status-choice, [data-field-id="type"] [class*="prop-status"]';
+		const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
 		// Find all Thymer-native choice spans inside the Type column cells
-		document.querySelectorAll('[data-field-id="type"] .prop-status-choice, [data-field-id="type"] [class*="prop-status"]').forEach(el => {
+		const nodes = [];
+		try {
+			if (scope.nodeType === 1 && typeof scope.matches === 'function' && scope.matches(selector)) nodes.push(scope);
+			nodes.push(...scope.querySelectorAll(selector));
+		} catch (_) { return; }
+		nodes.forEach(el => {
 			if (el.getAttribute('data-st-styled')) return; // already processed
 			const text = (el.textContent || '').trim().replace(/^#/, '');
 			const cfg = SUPERTYPE_CONFIG[text];
@@ -842,10 +926,23 @@ class Plugin extends CollectionPlugin {
 	}
 
 	_schedulePropertiesPanelScan() {
-		const run = () => this._scanPropertiesPanel();
-		[100, 500, 1200, 2500].forEach(d => setTimeout(run, d));
-		const iv = setInterval(run, 1500); setTimeout(() => clearInterval(iv), 20000);
-		try { const obs = new MutationObserver(run); obs.observe(document.body, { childList: true, subtree: true }); setTimeout(() => obs.disconnect(), 20000); } catch (_) {}
+		const run = () => this._queueScan('propertiesPanel', () => this._scanPropertiesPanel());
+		[100, 500, 1200, 2500].forEach(d => this._trackTimeout(setTimeout(run, d)));
+		const iv = this._trackInterval(setInterval(run, 1500));
+		this._trackTimeout(setTimeout(() => clearInterval(iv), 20000));
+		try {
+			const obs = new MutationObserver((mutations) => {
+				for (const m of mutations || []) {
+					if ((m.addedNodes && m.addedNodes.length) || (m.removedNodes && m.removedNodes.length)) {
+						run();
+						break;
+					}
+				}
+			});
+			obs.observe(document.body, { childList: true, subtree: true });
+			this._trackObserver(obs);
+			// Keep observer active for record navigation after initial page load.
+		} catch (_) {}
 	}
 
 	_getDocumentsToScan() {
@@ -910,14 +1007,42 @@ class Plugin extends CollectionPlugin {
 			return false;
 		};
 
+		const normalizeTypeText = (text) => (text || '').trim().replace(/^#/, '').toLowerCase();
+
 		// Build lookup maps from all types including custom
 		const typeSlugMap = Object.fromEntries(ALL_TYPES.map(id => [SUPERTYPE_CONFIG[id]?.label, id]).filter(([l]) => l));
 		const typeNameMap = Object.fromEntries(ALL_TYPES.map(id => { const s = SUPERTYPE_CONFIG[id]?.label?.replace('#', ''); return s ? [s.charAt(0).toUpperCase() + s.slice(1), id] : null; }).filter(Boolean));
+		const typeIdMap = Object.fromEntries(ALL_TYPES.map(id => [String(id).toLowerCase(), id]));
 
 		let currentType = null;
-		for (const s of this._queryAll('span', doc)) { if (inSettings(s)) continue; const t = (s.textContent || '').trim(); if (typeSlugMap[t]) { currentType = typeSlugMap[t]; break; } }
-		if (!currentType) { for (const n of this._queryAll('*', doc)) { if (inSettings(n)) continue; const t = (n.textContent || '').trim(); if (typeNameMap[t] && n.children.length <= 3 && !n.querySelector('table,ul,ol')) { currentType = typeNameMap[t]; break; } } }
-		if (!currentType) return;
+		// Prefer SDK-derived active record type (more reliable than DOM text scanning).
+		try {
+			const activeType = this.ui?.getActivePanel?.()?.getActiveRecord?.()?.prop?.('Type')?.choice?.();
+			const normalizedActiveType = normalizeTypeText(activeType);
+			if (normalizedActiveType && typeIdMap[normalizedActiveType]) currentType = typeIdMap[normalizedActiveType];
+		} catch (_) {}
+
+		for (const s of this._queryAll('span', doc)) {
+			if (currentType) break;
+			if (inSettings(s)) continue;
+			const t = (s.textContent || '').trim();
+			if (typeSlugMap[t]) { currentType = typeSlugMap[t]; break; }
+			const normalized = normalizeTypeText(t);
+			if (typeIdMap[normalized]) { currentType = typeIdMap[normalized]; break; }
+		}
+		if (!currentType) {
+			for (const n of this._queryAll('*', doc)) {
+				if (inSettings(n)) continue;
+				const t = (n.textContent || '').trim();
+				if (typeNameMap[t] && n.children.length <= 3 && !n.querySelector('table,ul,ol')) { currentType = typeNameMap[t]; break; }
+				const normalized = normalizeTypeText(t);
+				if (typeIdMap[normalized] && n.children.length <= 3 && !n.querySelector('table,ul,ol')) { currentType = typeIdMap[normalized]; break; }
+			}
+		}
+		if (!currentType) {
+			doc.getElementById('st-hide-style')?.remove();
+			return;
+		}
 
 		const allIds = new Set([...Object.keys(DEFAULT_FIELD_TYPES), ...(this.getConfiguration().fields || []).filter(f => f.active !== false).map(f => f.id).filter(id => !SYSTEM_FIELD_IDS.has(id))]);
 		const toHide = [...allIds].filter(fid => !isFieldVisible(fid, currentType));
